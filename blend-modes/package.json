@@ -1,0 +1,21 @@
+{
+  "name": "blend-modes-texture-reel",
+  "private": true,
+  "type": "module",
+  "description": "9:16 motion-design reel about texture blend modes, built in HTML/JS and rendered frame-by-frame at 18 fps.",
+  "scripts": {
+    "fonts": "node render/copy-fonts.mjs",
+    "preview": "http-server . -p 8080 -c-1 -o /build/",
+    "render": "node render/render.mjs",
+    "stills": "node render/render.mjs --stills"
+  },
+  "devDependencies": {
+    "@fontsource/alfa-slab-one": "5.3.0",
+    "@fontsource/archivo": "5.3.0",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "@fontsource/instrument-serif": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/patrick-hand-sc": "5.3.0",
+    "playwright": "1.56.1"
+  }
+}
