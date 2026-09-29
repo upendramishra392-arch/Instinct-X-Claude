@@ -1,0 +1,15 @@
+node_modules/
+render/.frames/
+
+# Media never goes in the repository: the reference video, the voiceover and every
+# render stay local (see README → "Local media").
+source/
+build/audio/
+output/
+*.mp4
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.aac

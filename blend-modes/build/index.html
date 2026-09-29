@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blend Modes Reel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage">
+      <canvas id="main" width="1080" height="1920"></canvas>
+      <canvas id="grain" width="540" height="960"></canvas>
+      <div id="vignette"></div>
+      <div id="scenes"></div>
+      <div id="caption"><span></span></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="play" type="button">Play</button>
+    <input id="scrub" type="range" min="0" max="863" value="0" step="1">
+    <span id="clock">0.00s · f0</span>
+  </div>
+  <div id="loading">Generating textures…</div>
+
+  <audio id="vo" src="../source/voiceover.mp3" preload="auto"></audio>
+
+  <script src="data/words.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/annotate.js"></script>
+  <script src="js/scenes.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
