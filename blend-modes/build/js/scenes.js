@@ -41,7 +41,7 @@
   }
   function slideIn(e, t, t0, x, y, o = {}) {
     const p = ease.outCubic(seg(t, t0, t0 + (o.dur || 0.24)));
-    place(e, x, y + (1 - p) * 90, { s: o.s || 1, o: t < t0 ? 0 : Math.min(1, p * 1.5), ax: 0.5, ay: 0 });
+    place(e, x, y + (1 - p) * 90, { s: o.s || 1, o: t < t0 ? 0 : 1, ax: 0.5, ay: 0 }); // opaque from its first frame; only the rise animates
   }
   function wipeLine(g, y) {
     g.save();
