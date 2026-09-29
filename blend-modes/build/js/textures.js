@@ -86,10 +86,10 @@
     const lum = new Float32Array(W * H);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
-        let v = 0.5 + (up(blot, x, y) - 0.5) * 0.3 + (up(mid, x, y) - 0.5) * 0.22 + (rng() - 0.5) * 0.2;
+        let v = 0.5 + (up(blot, x, y) - 0.5) * 0.14 + (up(mid, x, y) - 0.5) * 0.1 + (rng() - 0.5) * 0.1;
         for (const [nx, ny, c, k] of folds) {
           const dd = nx * x + ny * y - c;
-          if (dd > -50 && dd < 50) v += k * (0.09 * Math.sign(dd) * Math.exp(-Math.abs(dd) / 12) - 0.12 * Math.exp(-(dd * dd) / 5));
+          if (dd > -50 && dd < 50) v += k * (0.12 * Math.sign(dd) * Math.exp(-Math.abs(dd) / 12) - 0.12 * Math.exp(-(dd * dd) / 5));
         }
         lum[y * W + x] = v;
       }
@@ -150,7 +150,7 @@
     const lum = new Float32Array(W * H);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
-        let v = 0.9 + (up(shade, x, y) - 0.5) * 0.5 + (up(blot, x, y) - 0.5) * 0.1 + (rng() - 0.5) * 0.06;
+        let v = 0.9 + (up(shade, x, y) - 0.5) * 0.4 + (up(blot, x, y) - 0.5) * 0.1 + (rng() - 0.5) * 0.06;
         const c = up(clump, x, y);
         if (c > 0.71) v *= 1 - Math.min(0.7, (c - 0.71) * 3.2);
         lum[y * W + x] = v;
@@ -164,7 +164,7 @@
       g.arc(x, y, r, 0, Math.PI * 2);
       g.fill();
     };
-    for (let i = 0; i < 1100; i++) dot(rng() * W, rng() * H, 0.6 + rng() * 2.2, 0.3 + rng() * 0.6);
+    for (let i = 0; i < 400; i++) dot(rng() * W, rng() * H, 0.5 + rng() * 1.6, 0.3 + rng() * 0.6);
     // stains
     for (let i = 0; i < 3; i++) {
       const x = rng() * W, y = rng() * H, r = 60 + rng() * 120;
@@ -365,7 +365,7 @@
       d[j + 3] = 255;
     }
     g.putImageData(img, 0, 0);
-    if (levelCache.size > 90) levelCache.delete(levelCache.keys().next().value);
+    if (levelCache.size > 16) levelCache.delete(levelCache.keys().next().value);
     levelCache.set(key, c);
     return c;
   };
@@ -417,6 +417,7 @@
       ['paperB', () => paper(23)],
       ['paperC', () => paper(37)],
       ['crumple', () => crumple(41, BM.art.GRAIN_SPOT)],
+      ['crumpleClean', () => crumple(41)], // same sheet without the planted grain cluster
       ['grunge', () => grunge(53, BM.art.SCRATCH_SPOT)],
       ['speck', () => speck(61)],
       ['mottled', () => mottled(71, 0.3, 0.105)],
@@ -441,11 +442,23 @@
     }
     BM.GAMMA_N = Math.round(((lo + hi) / 2) * 100) / 100;
     T.neutral = BM.levels(M, 0, 255, BM.GAMMA_N); // main tones at 50%
-    T.muddy = gradientMap(M.L, [58, 46, 36], [206, 186, 156]); // what Normal mode leaves you with
+    // The levelled texture as a source for the second Levels, so contrast is applied after the
+    // gamma, in the order the panel shows (applying both in one LUT would pull the mean down).
+    T.neutralSrc = { id: 'neutralSrc', L: mapL(M.L, BM.levelsLUT(0, 255, BM.GAMMA_N)) };
+    // The hero texture: kraft-coloured grain with the paper's folds. It "looks perfect" on its
+    // own (hook), turns the design to mud in Normal mode, and is the texture that later gets
+    // desaturated and levelled — one texture all the way through.
+    T.kraft = gradientMap(M.L, [66, 46, 30], [236, 208, 164]);
+    T.muddy = BM.canvas(W, H);
+    const km = T.muddy.getContext('2d');
+    km.drawImage(T.kraft, 0, 0);
+    km.globalCompositeOperation = 'multiply';
+    km.globalAlpha = 0.5;
+    km.drawImage(T.crumpleClean, 0, 0);
     // Colour-cast versions of the same texture: raw tones (what you start with before
     // desaturating) and centred tones (isolates the colour shift in the Overlay demo).
-    T.tinted = gradientMap(M.L, [14, 60, 74], [250, 170, 84]);
-    T.tintedN = gradientMap(mapL(M.L, BM.levelsLUT(0, 255, BM.GAMMA_N)), [70, 20, 150], [150, 255, 190]);
+    T.tinted = T.kraft;
+    T.tintedN = gradientMap(mapL(M.L, BM.levelsLUT(0, 255, BM.GAMMA_N)), [10, 90, 150], [110, 190, 255]); // cool teal cast, near-neutral luminance
     progress && progress('textures ready');
   };
   function mapL(L, lut) {

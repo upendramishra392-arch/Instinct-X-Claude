@@ -67,9 +67,9 @@
   BM.TE = (i) => WORDS[i].end; // word i end
   BM.frameOf = (t) => Math.round(t * BM.FPS);
 
-  // Visual cuts land one-third of a frame ahead of the spoken onset so the
-  // picture change is never late relative to the word.
-  BM.LEAD = 0.02;
+  // Visual cuts lead the spoken onset by half a frame, so every cut and caption lands on
+  // the frame nearest the onset (round(start * fps)) and is never late.
+  BM.LEAD = 0.5 / BM.FPS;
   BM.cut = (i) => WORDS[i].start - BM.LEAD;
 
   // ---- Small animation helpers ---------------------------------------------
@@ -77,7 +77,8 @@
   BM.pop = function (t, t0, dur = 0.2, from = 0.82) {
     if (t < t0) return { s: from, o: 0, on: false };
     const p = clamp((t - t0) / dur);
-    return { s: from + (1 - from) * E.outBack(p), o: clamp(p * 3), on: true };
+    // full opacity from the first frame (a hard cut never shows a half-faded ghost); only the scale pops
+    return { s: from + (1 - from) * E.outBack(p), o: 1, on: true };
   };
   // Deterministic shake offset that decays after t0.
   BM.shake = function (t, t0, dur = 0.25, amp = 14, seed = 7) {
@@ -138,7 +139,7 @@
   BM.drawTex = function (g, tex, t, opt = {}) {
     const n = opt.boil || 2;
     const k = BM.boil(t, n, opt.salt || 0);
-    const j = opt.jitter == null ? 26 : opt.jitter;
+    const j = opt.jitter == null ? 3 : opt.jitter;
     const dx = (BM.hash(k, 11) - 0.5) * 2 * j;
     const dy = (BM.hash(k, 12) - 0.5) * 2 * j;
     const flip = opt.flip ? BM.hash(k, 13) > 0.5 : false;

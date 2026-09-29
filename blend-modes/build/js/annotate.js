@@ -107,9 +107,11 @@
     for (let s = 0; s < pts.length - 1; s++) {
       const [ax, ay] = pts[s], [bx, by] = pts[s + 1];
       const L = Math.hypot(bx - ax, by - ay) || 1, nx = -(by - ay) / L, ny = (bx - ax) / L;
-      for (let i = s ? 1 : 0; i <= 24; i++) {
-        const u = i / 24;
-        out.push([ax + (bx - ax) * u + nx * wob(u + s) * 4, ay + (by - ay) * u + ny * wob(u + s) * 4]);
+      // wobble scales with the segment, so short strokes (checks) stay one clean flick
+      const amp = Math.min(4, L * 0.02);
+      for (let i = s ? 1 : 0; i <= 10; i++) {
+        const u = i / 10;
+        out.push([ax + (bx - ax) * u + nx * wob(u + s) * amp, ay + (by - ay) * u + ny * wob(u + s) * amp]);
       }
     }
     return drawable(svg, [out], opt);
@@ -158,6 +160,7 @@
     e.style.fontSize = (opt.size || 64) + 'px';
     e.style.color = opt.color || '#fff';
     if (opt.font) e.style.fontFamily = opt.font;
+    if (opt.halo) e.style.textShadow = '0 0 3px rgba(14,12,12,0.9), 0 0 10px rgba(14,12,12,0.55)';
     const spans = [...text].map((ch) => BM.el('span', '', e, ch === '\n' ? '<br>' : ch));
     BM.place(e, x, y, { ax: opt.ax == null ? 0.5 : opt.ax, ay: 0.5, r: opt.rot || 0 });
     const obj = {

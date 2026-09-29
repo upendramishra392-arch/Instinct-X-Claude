@@ -7,12 +7,12 @@
 
   // Where the demos push in (label coordinates).
   BM.art.GRAIN_SPOT = [600, 760]; // dark grain cluster planted in the crumple texture (on the orange)
-  BM.art.SCRATCH_SPOT = [150, 760]; // bright scratch cluster planted in the grunge texture (navy sky)
+  BM.art.SCRATCH_SPOT = [120, 560]; // bright scratch cluster planted in the grunge texture (navy sky)
 
   const C = {
     navy: '#1a3462', navy2: '#142a50', ray: 'rgba(255,226,160,0.075)',
     sun: '#f2b23c', sunRing: '#efd8a6', cream: '#f3e4bf', red: '#c7402c', redDark: '#8c2a1d',
-    orange: '#ef7a1f', orangeLight: '#ffb04a', orangeDark: '#b94e14', ink: '#1a1410',
+    orange: '#ef7a1f', orangeLight: '#ffb04a', orangeDark: '#b94e14', ink: '#2e2016',
     leaf: '#2f7a3a', leafLight: '#46984a', leafVein: '#1c5126',
     hillFar: '#76a04f', hillMid: '#55893f', ground: '#3d6d34', tree: '#2b5a2d', treeHi: '#3f7c3c', road: '#e8d3a0',
   };
@@ -38,7 +38,7 @@
     g.fillRect(0, -wid, len, wid);
     g.restore();
     shape();
-    g.lineWidth = 6;
+    g.lineWidth = 4;
     g.strokeStyle = C.ink;
     g.stroke();
     g.beginPath();
@@ -136,6 +136,39 @@
       g.fillStyle = C.cream;
       g.fillText(ch, 0, 0);
     });
+  }
+
+  // Re-render the vector art as an old litho print: warm paper tone, slightly faded inks, a
+  // hair of misregistration and a 45° halftone screen whose dots grow in the darker areas.
+  function printPass(src) {
+    const out = BM.canvas(W, H);
+    const o = out.getContext('2d');
+    o.fillStyle = '#efe3c8';
+    o.fillRect(0, 0, W, H);
+    o.filter = 'saturate(0.88) sepia(0.1) contrast(0.95)';
+    o.drawImage(src, 0, 0);
+    o.filter = 'none';
+    o.globalCompositeOperation = 'multiply';
+    o.globalAlpha = 0.16;
+    o.drawImage(src, 3, 2);
+    o.globalAlpha = 1;
+    const d = src.getContext('2d').getImageData(0, 0, W, H).data;
+    const pitch = 8, ca = Math.SQRT1_2, sa = Math.SQRT1_2, N = Math.ceil(Math.hypot(W, H) / pitch / 2) + 1;
+    for (let i = -N; i <= N; i++) {
+      for (let j = -N; j <= N; j++) {
+        const x = W / 2 + (i * ca - j * sa) * pitch, y = H / 2 + (i * sa + j * ca) * pitch;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const k = ((y | 0) * W + (x | 0)) * 4;
+        const lum = (0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]) / 255;
+        const r = pitch * 0.5 * Math.sqrt(Math.max(0, 1 - lum)) * 0.95;
+        if (r < 0.6) continue;
+        o.fillStyle = `rgba(${d[k] * 0.55 | 0},${d[k + 1] * 0.55 | 0},${d[k + 2] * 0.55 | 0},0.32)`;
+        o.beginPath();
+        o.arc(x, y, r, 0, Math.PI * 2);
+        o.fill();
+      }
+    }
+    return out;
   }
 
   BM.art.build = function () {
@@ -237,7 +270,7 @@
     g.restore();
     g.beginPath();
     g.arc(OX, OY, OR, 0, Math.PI * 2);
-    g.lineWidth = 8;
+    g.lineWidth = 5;
     g.strokeStyle = C.ink;
     g.stroke();
     // Stem + leaves
@@ -263,7 +296,7 @@
     g.arc(LX, LY, LR, 0, Math.PI * 2);
     g.fillStyle = C.orange;
     g.fill();
-    g.lineWidth = 7;
+    g.lineWidth = 5;
     g.strokeStyle = C.ink;
     g.stroke();
     g.beginPath();
@@ -297,7 +330,8 @@
     g.fillStyle = C.cream;
     g.fillText('★  FANCY GRADE  ★', W / 2, 168);
     g.letterSpacing = '0px';
-    archText(g, 'GOLDEN HOUR', 540, 1290, 1010, "400 132px 'Alfa Slab One'", 6);
+    // sized so the whole arc stays inside the cream border (glyphs span x ≈ 78–1005)
+    archText(g, 'GOLDEN HOUR', 540, 1290, 1010, "400 106px 'Alfa Slab One'", 4);
 
     // Ribbon
     const RY = 1668, RW = 900, RH = 128;
@@ -312,7 +346,7 @@
       g.closePath();
       g.fillStyle = C.redDark;
       g.fill();
-      g.lineWidth = 6;
+      g.lineWidth = 4;
       g.strokeStyle = C.ink;
       g.stroke();
     };
@@ -322,7 +356,7 @@
     g.rect(W / 2 - RW / 2, RY - RH / 2, RW, RH);
     g.fillStyle = C.red;
     g.fill();
-    g.lineWidth = 7;
+    g.lineWidth = 5;
     g.strokeStyle = C.ink;
     g.stroke();
     g.fillStyle = 'rgba(255,255,255,0.12)';
@@ -339,6 +373,9 @@
     g.font = "600 40px 'Barlow Condensed'";
     g.letterSpacing = '7px';
     g.fillStyle = C.cream;
+    g.lineWidth = 6;
+    g.strokeStyle = C.ink;
+    g.strokeText('VALLEY GROWERS  ·  EST. 1926', W / 2, 1800); // ink outline keeps it readable over the road
     g.fillText('VALLEY GROWERS  ·  EST. 1926', W / 2, 1800);
     g.letterSpacing = '0px';
 
@@ -357,7 +394,7 @@
       g.restore();
     });
 
-    BM.art.label = c;
-    return c;
+    BM.art.label = printPass(c);
+    return BM.art.label;
   };
 })();

@@ -8,8 +8,10 @@
   const S = (BM.scenes = []);
   const scene = (def) => S.push(def);
 
-  const INK = '#1d1a1b', CREAM = '#f1e8d6', RED = '#e3372f', WHITE = '#fbfaf6';
+  const INK = '#1d1a1b', CREAM = '#f1e8d6', RED = '#c01f26', WHITE = '#fbfaf6';
   const FINAL_B = 24, FINAL_W = 230; // the final Levels 2 contrast (input black / white)
+  const PX = 540 - BM.ui.PANEL_W / 2 + 3; // left inner edge of a centred editor panel (inside its 3 px border)
+  const HW = BM.ui.PANEL_W - 68; // histogram width (panel minus its 34 px side margins)
 
   // ---- helpers ----------------------------------------------------------------
   const tex = () => BM.tex;
@@ -49,101 +51,131 @@
     g.fillRect(0, y - 4, W, 8);
     g.restore();
   }
-  function divider(g, x) {
+  function divider(g, x, gap) {
+    const spans = gap ? [[0, gap[0]], [gap[1], H]] : [[0, H]];
     g.save();
-    g.fillStyle = 'rgba(0,0,0,0.35)';
-    g.fillRect(x - 7, 0, 14, H);
-    g.fillStyle = WHITE;
-    g.fillRect(x - 4, 0, 8, H);
+    spans.forEach(([a, b]) => {
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.fillRect(x - 7, a, 14, b - a);
+      g.fillStyle = WHITE;
+      g.fillRect(x - 4, a, 8, b - a);
+    });
     g.restore();
   }
-  // Menu highlight walk: keys [[name, tArrive], ...]; between keys it steps item-by-item.
-  function walk(items, keys, t) {
-    const names = items.filter((x) => x !== '-');
-    if (t < keys[0][1]) return null;
-    for (let i = keys.length - 1; i >= 0; i--) {
-      const [name, ta] = keys[i];
-      if (t >= ta) return name;
-      const [pname, pta] = keys[i - 1] || [];
-      if (i > 0 && t >= pta) {
-        // stepping from pname to name, arriving at ta; leave after a short hold
-        const a = names.indexOf(pname), b = names.indexOf(name);
-        const leave = Math.max(pta, ta - (b - a) * 0.056);
-        if (t < leave) return pname;
-        return names[Math.min(b, a + 1 + Math.floor((t - leave) / 0.056))];
-      }
-    }
-    return keys[0][0];
-  }
-
   const ALL = ['Normal', 'Dissolve', '-', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Darker Color', '-', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Lighter Color', '-', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', '-', 'Difference', 'Exclusion', 'Subtract', 'Divide'];
   const DARKEN = ['Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Darker Color'];
   const LIGHTEN = ['Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Lighter Color'];
   const CONTRAST = ['Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix'];
 
   // =============================================================================
-  // 1. "Your texture can look perfect,"  (0 → "then")
+  // 1. "Your texture can look perfect,"  (0 → "then") — the texture on its own, as a print
   scene({
     id: 'hook',
     from: 0,
     build(el, s) {
+      // The hero texture (kraft grain with folds) as a photo print. It's the same sheet that
+      // later lands on the design in Normal mode.
+      const cw = 820, ch = 1180;
+      s.card = BM.canvas(cw, ch);
+      const c = s.card.getContext('2d');
+      c.fillStyle = '#f7f4ee';
+      BM.rr(c, 0, 0, cw, ch, 16);
+      c.fill();
+      c.save();
+      BM.rr(c, 20, 20, cw - 40, ch - 110, 8);
+      c.clip();
+      c.drawImage(tex().muddy, 130, 300, cw - 40, ch - 110, 20, 20, cw - 40, ch - 110);
+      c.restore();
+      c.font = "500 30px 'Inter'";
+      c.fillStyle = '#3b3b3b';
+      c.textAlign = 'center';
+      c.fillText('kraft_grain_texture.jpg', cw / 2, ch - 38);
       s.svg = ann.layer(el);
-      s.circle = ann.circle(s.svg, 420, 688, 196, 108, { seed: 4, width: 7, color: WHITE, rot: -0.05 });
-      s.hand = ann.hand(el, 'LOOKS PERFECT', 560, 512, { size: 66, rot: -3 });
-      s.check = ann.check(s.svg, 858, 500, 50, { seed: 9, width: 8, color: WHITE });
+      s.circle = ann.circle(s.svg, 540, 930, 250, 190, { seed: 4, width: 8, color: WHITE, rot: -0.05 });
+      s.hand = ann.hand(el, 'LOOKS PERFECT', 520, 640, { size: 82, rot: -3 });
+      s.check = ann.check(s.svg, 876, 626, 62, { seed: 9, width: 10, color: WHITE });
     },
-    draw(g, t) {
-      BM.paper(g, '#9b53a7', tex().paperA, t, { boil: 3, jitter: 10 });
-      g.font = "800 250px 'Barlow Condensed'";
-      const w = g.measureText('TEXTURE').width;
+    draw(g, t, s) {
+      BM.paper(g, '#2a2628', tex().paperB, t, { boil: 4, jitter: 3 });
+      g.save();
       if (t < cut(4)) {
-        const sc = 1 + 0.07 * ease.outCubic(seg(t, 0, 1.5));
-        BM.inkText(g, 'TEXTURE', 540, 960, { size: 250, color: '#2a2226', op: 'multiply', scale: sc, t, rough: 0.75 });
+        // the print sits on the desk, kicks on "texture" and drifts in
+        const kick = t >= cut(1) ? 0.07 * (1 - ease.outCubic(seg(t, cut(1), cut(1) + 0.18))) : 0;
+        const [dx, dy] = BM.shake(t, cut(1), 0.16, 8, 5);
+        const sc = 1 + 0.05 * ease.inOutSine(seg(t, 0, cut(4))) + kick;
+        g.translate(540 + dx, 900 + dy);
+        g.rotate(-0.04);
+        g.scale(sc, sc);
+        g.shadowColor = 'rgba(0,0,0,0.55)';
+        g.shadowBlur = 60;
+        g.shadowOffsetY = 30;
       } else {
-        // punch in on the "T": its top-left corner lands at (390, 615)
-        const z = 4.3 + 0.18 * seg(t, cut(4), cut(5));
-        BM.inkText(g, 'TEXTURE', 390 + (w / 2) * z, 615 + 90 * z, { size: 250, color: '#2a2226', op: 'multiply', scale: z, t, rough: 0.6 });
+        // "perfect": punch in on the grain
+        const z = 2.6 + 0.12 * seg(t, cut(4), cut(5));
+        g.translate(540, 960);
+        g.scale(z, z);
+        g.rotate(-0.04);
+        g.translate(0, 60);
       }
+      g.drawImage(s.card, -s.card.width / 2, -s.card.height / 2);
+      g.restore();
     },
     update(t, s) {
       s.circle.at(t, cut(4) + 0.03, 0.33); // "perfect"
-      s.hand.at(t, cut(4) + 0.12, 0.4);
+      s.hand.at(t, cut(4) + 0.1, 0.4);
       s.check.at(t, cut(4) + 0.5, 0.18);
     },
   });
 
-  // 2. "then ruin your whole design"  — flashing textures, gritty type
-  const FLASH = [
-    { bg: '#1c2a6e', tex: 'grunge', op: 'screen', ink: '#0c0c14', iop: 'multiply', mark: CREAM },
-    { bg: '#6a1d3b', tex: 'paperB', op: 'overlay', ink: '#46a894', iop: 'source-over', mark: CREAM },
-    { bg: '#f3a9d6', tex: 'crumple', op: 'multiply', ink: '#d63c34', iop: 'multiply', mark: INK },
-    { bg: '#3f9d95', tex: 'paperC', op: 'overlay', ink: '#10393a', iop: 'multiply', mark: CREAM },
-    { bg: '#2b39cf', tex: 'grunge', op: 'screen', ink: '#0a0a0a', iop: 'multiply', mark: CREAM },
-    { bg: '#d6cbef', tex: 'crumple', op: 'multiply', ink: '#2f8c78', iop: 'multiply', mark: INK },
-    { bg: '#e9622c', tex: 'paperA', op: 'overlay', ink: '#1d1a1b', iop: 'multiply', mark: INK },
-    { bg: '#121214', tex: 'grunge', op: 'screen', ink: '#e9e2d3', iop: 'source-over', mark: CREAM },
+  // 2. "then ruin your whole design"  — on every word the design is buried under another
+  //    texture in Normal mode; a rubber stamp lands on "ruin".
+  const RUIN = [
+    { tex: 'muddy', alpha: 0.86 }, // then
+    { tex: 'violet', alpha: 0.8 }, // ruin
+    { tex: 'crumpleClean', alpha: 0.8 }, // your
+    { tex: 'raw', alpha: 0.86 }, // whole
+    { tex: 'grunge', alpha: 0.8 }, // design
   ];
   scene({
     id: 'ruin',
     from: cut(5), // "then"
     build(el, s) {
-      s.svg = ann.layer(el);
-      s.arrow = ann.arrow(s.svg, 640, 560, 575, 800, { bend: -70, seed: 12, width: 7, head: 36 });
+      s.violet = BM.canvas();
+      BM.paper(s.violet.getContext('2d'), '#9b53a7', tex().paperA, 0, { jitter: 0 });
+      s.stamp = BM.canvas(900, 330);
+      const c = s.stamp.getContext('2d');
+      c.strokeStyle = c.fillStyle = '#d8322a';
+      c.lineWidth = 16;
+      BM.rr(c, 20, 20, 860, 290, 26);
+      c.stroke();
+      c.font = "900 190px 'Archivo'";
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.letterSpacing = '6px';
+      c.fillText('RUINED', 450, 176);
+      c.globalCompositeOperation = 'destination-out';
+      c.globalAlpha = 0.9;
+      c.drawImage(tex().speck, 60, 700, 900, 330, 0, 0, 900, 330);
+      s.beats = [5, 6, 7, 8, 9].map(cut); // then / ruin / your / whole / design
     },
     draw(g, t, s) {
-      const f = FLASH[Math.floor(((t - s.from) * BM.FPS) / 3) % FLASH.length];
-      s.f = f;
-      g.fillStyle = f.bg;
-      g.fillRect(0, 0, W, H);
-      BM.drawTex(g, tex()[f.tex], t, { op: f.op, boil: 3, jitter: 22, flip: true });
-      g.font = "900 200px 'Archivo'";
-      const size = Math.min(230, (200 * 940) / g.measureText('RUINED.').width);
-      BM.inkText(g, 'RUINED.', 540, 990, { family: "'Archivo'", weight: 900, size, color: f.ink, op: f.iop, t, rough: 0.95, letterSpacing: -4 });
-      BM.drawTex(g, tex().paperB, t, { op: 'overlay', alpha: 0.4, boil: 3 });
-    },
-    update(t, s) {
-      s.arrow.color(s.f ? s.f.mark : CREAM);
-      s.arrow.at(t, s.from + 0.06, 0.3);
+      const k = Math.max(0, s.beats.filter((b) => t >= b).length - 1);
+      const look = RUIN[k];
+      const [dx, dy] = BM.shake(t, s.beats[k], 0.12, 10, 20 + k);
+      const c = Object.assign(cam(1.04 + 0.04 * seg(t, s.from, s.to)), { dx, dy });
+      layer(g, label(), c);
+      layer(g, look.tex === 'violet' ? s.violet : tex()[look.tex], c, 'source-over', look.alpha);
+      if (t >= cut(6)) {
+        const p = seg(t, cut(6), cut(6) + 0.14); // "ruin"
+        const sc = 1 + 0.5 * (1 - ease.outCubic(p));
+        g.save();
+        g.translate(540, 960);
+        g.rotate(-0.16);
+        g.scale(sc, sc);
+        g.globalAlpha = 0.95;
+        g.drawImage(s.stamp, -450, -165);
+        g.restore();
+      }
     },
   });
 
@@ -161,9 +193,9 @@
     draw(g, t, s) {
       const push = 1 + 0.03 * seg(t, s.from, s.to);
       layer(g, label(), cam(push));
-      const t0 = T(12) - 0.06; // "lay"
+      const t0 = T(11); // "you" — accelerates and lands on "top"
       if (t < t0) return;
-      const p = ease.outCubic(seg(t, t0, s.land));
+      const p = ease.inQuad(seg(t, t0, s.land));
       const [sx, sy] = BM.shake(t, s.land, 0.22, 12, 3);
       g.save();
       g.globalAlpha = 0.86;
@@ -222,8 +254,8 @@
       s.cross = ann.cross(s.svg, 540, 990, 600, { color: RED, width: 17, seed: 21 });
     },
     draw(g, t, s) {
-      BM.paper(g, '#ebe3d1', tex().paperB, t, { boil: 3, jitter: 8 });
-      BM.drawTex(g, tex().crumple, t, { op: 'multiply', alpha: 0.5, boil: 3, jitter: 8 });
+      BM.paper(g, '#ebe3d1', tex().paperB, t, { boil: 4, jitter: 3 });
+      BM.drawTex(g, tex().crumpleClean, t, { op: 'multiply', alpha: 0.5, boil: 4, jitter: 3 });
       s.cards.forEach((cv, i) => {
         const t0 = s.times[i];
         if (t < t0) return;
@@ -240,7 +272,7 @@
     },
     update(t, s) {
       popIn(s.title, t, cut(19), 540, 312); // "a"
-      s.strike.at(t, T(21) - 0.02, 0.2); // "texture"
+      s.strike.at(t, cut(21), 0.2); // "texture"
       s.cross.at(t, T(21) + 0.1, 0.36);
     },
   });
@@ -250,25 +282,34 @@
     id: 'menu-all',
     from: cut(22), // "it's"
     build(el, s) {
-      s.menu = ui.menu(el, ALL.slice(0, 24), { font: 38, line: 50, width: 600, height: 1170 });
+      s.menu = ui.menu(el, ALL.slice(0, 22), { font: 38, line: 50, width: 600, height: 1100 });
       s.title = ui.title(el, 'BLEND MODES', 122);
-      s.cur = ui.cursor(el);
+      s.cur = ui.cursor(el, 230);
       s.svg = ann.layer(el);
       s.top = 318;
       s.keys = [['Normal', s.from + 0.12], ['Multiply', T(24) - 0.04], ['Screen', T(25) + 0.04], ['Overlay', T(26) + 0.02]]; // right / blend / mode
-      s.checks = s.keys.slice(1).map(([n], i) => ann.check(s.svg, 900, s.top + s.menu.rows[n].mid, 40, { color: RED, width: 8, seed: 30 + i }));
+      s.checks = s.keys.slice(1).map(([n], i) => ann.check(s.svg, 790, s.top + s.menu.rows[n].mid, 50, { color: RED, width: 9, seed: 30 + i }));
     },
     draw(g, t) {
-      BM.paper(g, '#c9bde6', tex().paperC, t, { boil: 3, jitter: 8 });
+      BM.paper(g, '#c9bde6', tex().paperC, t, { boil: 4, jitter: 3 });
     },
     update(t, s) {
       popIn(s.menu.el, t, s.from, 540, s.top, { ax: 0.5, ay: 0, from: 0.9, dur: 0.18 });
-      popIn(s.title, t, T(25) - 0.02, 540, 214);
-      const name = walk(ALL, s.keys, t);
-      s.menu.hl(name);
+      popIn(s.title, t, cut(25), 540, 214);
       const y = (n) => s.top + s.menu.rows[n].mid + 8;
-      ui.drive(s.cur, t, [[s.from, 960, 1500], [s.keys[0][1], 760, y('Normal')], ...s.keys.slice(1).map(([n, ta]) => [ta, 760, y(n), 'inOutSine'])]);
+      const xy = ui.drive(s.cur, t, [[s.from, 960, 1500], [s.keys[0][1], 760, y('Normal')], ...s.keys.slice(1).map(([n, ta]) => [ta, 760, y(n), 'inOutSine'])]);
+      // the highlight is whatever row the pointer is over, so the two never drift apart
+      const ry = xy[1] - 8 - s.top, R = s.menu.rows;
+      s.menu.hl(t < s.keys[0][1] - 0.04 ? null : Object.keys(R).find((n) => ry >= R[n].top && ry < R[n].top + 50) || null);
       s.checks.forEach((c, i) => c.at(t, s.keys[i + 1][1], 0.16));
+      // clear the page before the next scene peels it away
+      const out = 1 - seg(t, s.to - 0.15, s.to);
+      if (out < 1) {
+        s.menu.el.style.opacity = out;
+        s.title.style.opacity = +s.title.style.opacity * out;
+        s.cur.el.style.opacity = out;
+      }
+      s.svg.style.opacity = out;
     },
   });
 
@@ -279,18 +320,18 @@
       from: def.from,
       build(el, s) {
         s.title = ui.title(el, def.title, 124, def.titleColor);
-        s.menu = ui.menu(el, def.items, { font: 54, line: 76, width: 600 });
-        s.cur = ui.cursor(el);
+        s.menu = ui.menu(el, def.items, { font: 64, line: 96, width: 780, pad: 50 });
+        s.cur = ui.cursor(el, 250);
       },
       draw: def.draw,
       update(t, s) {
-        popIn(s.title, t, s.from, 540, 540);
-        popIn(s.menu.el, t, s.from, 540, 610, { ax: 0.5, ay: 0, from: 0.9, dur: 0.18 });
-        const y = (n) => 610 + s.menu.rows[n].mid + 8;
+        popIn(s.title, t, s.from, 540, 430);
+        popIn(s.menu.el, t, s.from, 540, 520, { ax: 0.5, ay: 0, from: 0.9, dur: 0.18 });
+        const y = (n) => 520 + s.menu.rows[n].mid + 8;
         const first = def.items[0];
         const blink = t >= def.click + 0.08 && t < def.click + 0.14;
         s.menu.hl(blink ? null : t >= def.pickAt ? def.pick : t >= s.from + 0.06 ? first : null);
-        ui.drive(s.cur, t, [[s.from, 930, 1420], [s.from + 0.14, 720, y(first)], [def.pickAt, 720, y(def.pick), 'outCubic']], [[def.click - 0.02, def.click + 0.08]], [def.click]);
+        ui.drive(s.cur, t, [[s.from, 940, 1420], [s.from + 0.14, 780, y(first)], [def.pickAt, 780, y(def.pick), 'outCubic']], [[def.click - 0.02, def.click + 0.08]], [def.click]);
       },
     });
   }
@@ -307,24 +348,24 @@
       s.teal = ui.teal(el, 'on white', 128);
     },
     draw(g, t, s) {
-      BM.drawTex(g, tex().crumple, t, { boil: 3, jitter: 4 });
+      BM.drawTex(g, tex().crumple, t, { boil: 4, jitter: 3 });
       const p = seg(t, s.from, s.from + 0.34);
-      if (p < 1) BM.peel(g, (c) => BM.paper(c, '#c9bde6', tex().paperC, t, { boil: 3, jitter: 8 }), p);
+      if (p < 1) BM.peel(g, (c) => BM.paper(c, '#c9bde6', tex().paperC, t, { boil: 4, jitter: 3 }), p);
     },
     update(t, s) {
       s.hand.at(t, T(29), 0.25); // "texture"
       s.arrow.at(t, T(29) + 0.1, 0.22);
       s.circle.at(t, T(29) + 0.22, 0.28);
-      popIn(s.teal, t, T(31) - 0.02, 540, 1200, { r: -2 }); // "white?"
+      popIn(s.teal, t, cut(31), 540, 1200); // "white?"
     },
   });
 
   // 7. "Try multiply."
   menuScene({
     id: 'multiply-menu', from: cut(32), title: 'DARKEN MODES', items: DARKEN, pick: 'Multiply',
-    pickAt: T(33) - 0.02, click: T(33) + 0.14, // "multiply"
+    pickAt: cut(33), click: T(33) + 0.14, // "multiply"
     draw(g, t) {
-      BM.drawTex(g, tex().crumple, t, { boil: 3, jitter: 4 });
+      BM.drawTex(g, tex().crumple, t, { boil: 4, jitter: 3 });
     },
   });
 
@@ -356,7 +397,7 @@
     },
     update(t, s) {
       popIn(s.teal, t, s.from, 540, 430);
-      s.circle.at(t, T(39) - 0.02, 0.3); // "grain"
+      s.circle.at(t, cut(39), 0.3); // "grain"
       s.hand.at(t, T(40), 0.4); // "stays"
     },
   });
@@ -369,19 +410,19 @@
       s.teal = ui.teal(el, 'on black', 128);
     },
     draw(g, t) {
-      BM.drawTex(g, tex().grunge, t, { boil: 2, jitter: 16, flip: true });
+      BM.drawTex(g, tex().grunge, t, { boil: 4, jitter: 3 });
     },
     update(t, s) {
-      popIn(s.teal, t, T(42) - 0.02, 540, 960, { r: 2 }); // "black?"
+      popIn(s.teal, t, cut(42), 540, 960); // "black?"
     },
   });
 
   // 10. "Try screen."
   menuScene({
     id: 'screen-menu', from: cut(43), title: 'LIGHTEN MODES', titleColor: CREAM, items: LIGHTEN, pick: 'Screen',
-    pickAt: T(44) - 0.02, click: T(44) + 0.14, // "screen"
+    pickAt: cut(44), click: T(44) + 0.14, // "screen"
     draw(g, t) {
-      BM.drawTex(g, tex().grunge, t, { boil: 2, jitter: 16, flip: true });
+      BM.drawTex(g, tex().grunge, t, { boil: 4, jitter: 3 });
     },
   });
 
@@ -392,19 +433,20 @@
     build(el, s) {
       s.teal = ui.teal(el, 'Screen', 100);
       s.svg = ann.layer(el);
-      s.a1 = ann.arrow(s.svg, 700, 690, 320, 872, { bend: 60, width: 8, seed: 31 });
-      s.a2 = ann.arrow(s.svg, 690, 1230, 310, 1050, { bend: -60, width: 8, seed: 32 });
-      s.hand = ann.hand(el, 'BRIGHT\nMARKS', 800, 960, { size: 80, rot: -4 });
+      const [sx, sy] = toScreen(s.cam(T(51)), ...BM.art.SCRATCH_SPOT);
+      s.a2 = ann.circle(s.svg, sx + 10, sy, 170, 230, { width: 8, seed: 31 });
+      s.a1 = ann.arrow(s.svg, 560, 1300, sx + 110, sy + 215, { bend: -40, width: 8, seed: 32 });
+      s.hand = ann.hand(el, 'BRIGHT MARKS', 640, 1350, { size: 80, rot: -4, halo: true });
     },
     cam(t) {
-      const z = ease.inOutCubic(seg(t, T(48), T(51))); // "and" → "marks"
+      const z = ease.inOutCubic(seg(t, T(47), T(50) - 0.04)); // "out" → "bright"
       const [gx, gy] = BM.art.SCRATCH_SPOT;
       return cam(1 + 0.6 * z, BM.lerp(540, gx, z), BM.lerp(960, gy, z));
     },
     draw(g, t, s) {
       const c = s.cam(t);
       layer(g, label(), c);
-      layer(g, tex().grunge, c, 'screen');
+      layer(g, tex().grunge, c, 'screen', 0.86 + 0.14 * BM.hash(BM.boil(t, 2), 7)); // film flicker
       const wp = ease.inOutCubic(seg(t, s.from + 0.04, T(47))); // "drops out"
       if (wp < 1) {
         const y = wp * H;
@@ -414,9 +456,9 @@
     },
     update(t, s) {
       popIn(s.teal, t, s.from, 540, 430);
-      s.a1.at(t, T(50), 0.26); // "bright"
-      s.a2.at(t, T(50) + 0.14, 0.26);
-      s.hand.at(t, T(51), 0.3); // "marks"
+      s.a2.at(t, T(50), 0.26); // "bright"
+      s.a1.at(t, T(51), 0.22); // "marks"
+      s.hand.at(t, T(51), 0.3);
     },
   });
 
@@ -426,23 +468,24 @@
     from: cut(54), // "Overlay"
     build(el, s) {
       s.title = ui.title(el, 'CONTRAST MODES', 124);
-      s.menu = ui.menu(el, CONTRAST, { font: 52, line: 74, width: 540 });
-      s.cur = ui.cursor(el);
+      s.menu = ui.menu(el, CONTRAST, { font: 62, line: 92, width: 640, pad: 40 });
+      s.cur = ui.cursor(el, 250);
       s.svg = ann.layer(el);
       const r = s.menu.rows;
-      s.bracket = ann.bracket(s.svg, 700, 610 + r['Overlay'].top + 4, 610 + r['Soft Light'].top + 70, { color: RED, width: 8, w: 30 });
-      s.hand = ann.hand(el, 'DIFFERENT\nRULES', 880, 682, { size: 62, color: RED, rot: -6 });
+      const b0 = 520 + r['Overlay'].top + 6, b1 = 520 + r['Soft Light'].top + 86;
+      s.bracket = ann.bracket(s.svg, 714, b0, b1, { color: RED, width: 9, w: 32 });
+      s.hand = ann.hand(el, 'DIFFERENT\nRULES', 885, b1 + 150, { size: 66, color: RED, rot: -6 });
     },
     draw(g, t) {
-      BM.paper(g, '#a3a19c', tex().paperA, t, { boil: 3, jitter: 8 });
+      BM.paper(g, '#cfccc8', tex().paperA, t, { boil: 4, jitter: 3 });
     },
     update(t, s) {
-      popIn(s.title, t, s.from, 540, 520);
-      popIn(s.menu.el, t, s.from, 140, 610, { ax: 0, ay: 0, from: 0.9, dur: 0.18 });
-      s.menu.hl(t >= T(56) - 0.02 ? 'Soft Light' : 'Overlay'); // "soft"
-      const y = (n) => 610 + s.menu.rows[n].mid + 8;
+      popIn(s.title, t, s.from, 540, 430);
+      popIn(s.menu.el, t, s.from, 60, 520, { ax: 0, ay: 0, from: 0.9, dur: 0.18 });
+      s.menu.hl(t >= cut(56) ? 'Soft Light' : 'Overlay'); // "soft"
+      const y = (n) => 520 + s.menu.rows[n].mid + 8;
       ui.drive(s.cur, t, [[s.from, 560, y('Overlay') + 40], [s.from + 0.2, 560, y('Overlay')], [T(56) - 0.08, 560, y('Overlay')], [T(56) + 0.04, 560, y('Soft Light'), 'outCubic']]);
-      s.bracket.at(t, T(58) - 0.02, 0.24); // "work"
+      s.bracket.at(t, cut(58), 0.24); // "work"
       s.hand.at(t, T(59), 0.34); // "differently"
     },
   });
@@ -456,18 +499,18 @@
       s.hand = ann.hand(el, 'NEUTRAL POINT', 540, 430, { size: 72, color: CREAM, rot: -2 });
       s.count = ui.teal(el, '0%', 92);
       s.svg = ann.layer(el);
-      s.circle = ann.circle(s.svg, 540, 880, 128, 170, { color: RED, width: 8, seed: 41 });
-      s.v = (t) => kf(t, [[s.from + 0.1, 0.03], [T(63), 0.97, 'inOutSine'], [T(64), 0.97], [T(65), 0.5, 'outBack']]); // sweep, then settle on "gray"
+      s.circle = ann.circle(s.svg, 540, 905, 128, 180, { color: RED, width: 8, seed: 41 });
+      s.v = (t) => kf(t, [[s.from + 0.1, 0.03], [T(63), 0.97, 'inOutSine'], [T(64), 0.97], [T(65), 0.5, 'outCubic']]); // sweep, then settle on "gray"
     },
     draw(g, t, s) {
-      BM.paper(g, '#26262b', tex().paperB, t, { boil: 3, jitter: 8 });
+      BM.paper(g, '#26262b', tex().paperB, t, { boil: 4, jitter: 3 });
       const x0 = 90, x1 = 990, y0 = 780, y1 = 980;
       const gr = g.createLinearGradient(x0, 0, x1, 0);
       gr.addColorStop(0, '#000');
       gr.addColorStop(1, '#fff');
       g.fillStyle = gr;
       g.fillRect(x0, y0, x1 - x0, y1 - y0);
-      clipRect(g, x0, y0, x1 - x0, y1 - y0, () => BM.drawTex(g, tex().paperC, t, { op: 'overlay', alpha: 0.35, boil: 3 }));
+      clipRect(g, x0, y0, x1 - x0, y1 - y0, () => BM.drawTex(g, tex().paperC, t, { op: 'overlay', alpha: 0.35, boil: 4 }));
       g.lineWidth = 5;
       g.strokeStyle = CREAM;
       g.strokeRect(x0, y0, x1 - x0, y1 - y0);
@@ -491,7 +534,7 @@
       g.closePath();
       g.fill();
       // Overlay demo: colour + 50% gray = colour (real canvas compositing)
-      const a = seg(t, T(64), T(64) + 0.15); // "middle"
+      const a = seg(t, T(65) + 0.05, T(65) + 0.2); // after the marker settles on "gray"
       if (a > 0) {
         g.save();
         g.globalAlpha = a;
@@ -535,7 +578,7 @@
     id: 'not-centered',
     from: cut(66), // "If"
     build(el, s) {
-      s.panel = ui.panel(el, { tab: 'Histogram', name: 'Grain Texture', rows: [{ histo: [832, 330], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Average', val: '30%', key: 'avg' }] });
+      s.panel = ui.panel(el, { tab: 'Histogram', name: 'Grain Texture', rows: [{ histo: [HW, 330], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Average luminance', val: '30%', key: 'avg' }] });
       s.svg = ann.layer(el);
       s.top = 540;
     },
@@ -547,11 +590,11 @@
       let peak = 0;
       for (let i = 1; i < 256; i++) if (bins[i] > bins[peak]) peak = i;
       const o = ui.offset(s.panel.refs.h, s.panel.el);
-      const hx = 540 - 450 + o.x, hy = s.top + o.y;
-      const px = hx + (peak / 255) * 832;
+      const hx = PX + o.x, hy = s.top + 3 + o.y;
+      const px = hx + (peak / 255) * HW;
       s.circle = ann.circle(s.svg, px, hy + 190, 120, 165, { color: RED, width: 8, seed: 51 });
-      s.arrow = ann.arrow(s.svg, px + 90, hy + 70, hx + 416 - 16, hy + 70, { bend: -50, color: RED, width: 8, seed: 52 });
-      s.hand = ann.hand(s.el, 'OFF-CENTER', px + 20, s.top - 96, { size: 72, color: RED, rot: -4 });
+      s.arrow = ann.arrow(s.svg, px + 20, hy + 120, hx + HW / 2 - 14, hy + 120, { bend: -14, head: 24, color: RED, width: 9, seed: 52 });
+      s.hand = ann.hand(s.el, 'OFF-CENTER', px + 20, s.top - 96, { size: 72, color: RED, rot: -4, halo: true });
     },
     draw(g, t) {
       BM.drawTex(g, tex().raw, t, { jitter: 0 });
@@ -576,26 +619,26 @@
       s.tc = ui.teal(el, 'color shift', 76);
     },
     phase(t) {
-      return t < cut(75) ? 0 : t < cut(79) ? 1 : 2; // "or" / "and"
+      return t < cut(76) ? 0 : t < cut(80) ? 1 : 2; // "darken" / "shift"
     },
     draw(g, t, s) {
       const ph = s.phase(t);
-      const c = [cam(1), cam(1.22, 540, 900), cam(1.1, 540, 1040)][ph];
+      const c = cam(1.1, 540, 1040);
       layer(g, label(), c);
       clipRect(g, W / 2, 0, W / 2, H, () => {
         layer(g, label(), c);
         if (ph === 0) layer(g, tex().bright, c, 'overlay');
         if (ph === 1) layer(g, tex().raw, c, 'overlay');
-        if (ph === 2) layer(g, tex().tintedN, c, 'overlay', 1, `hue-rotate(${kf(t, [[T(80), 0], [s.to, 150, 'inOutSine']]).toFixed(1)}deg)`); // "shift"
+        if (ph === 2) layer(g, tex().tintedN, c, 'overlay', 1, `hue-rotate(${kf(t, [[cut(80), 0], [s.to, 60, 'inOutSine']]).toFixed(1)}deg)`); // "shift"
       });
       divider(g, W / 2);
     },
     update(t, s) {
       const ph = s.phase(t);
-      place(s.before, 270, 112);
-      place(s.after, 810, 112);
+      place(s.before, 270, 345);
+      place(s.after, 810, 345);
       // one label per phase, each popping on its word
-      [[s.tb, T(74), -2], [s.td, T(76), 2], [s.tc, T(80), -2]].forEach(([e, t0, r], i) => {
+      [[s.tb, T(74), 0], [s.td, T(76), 0], [s.tc, T(80), 0]].forEach(([e, t0, r], i) => {
         popIn(e, t, t0, 810, 1290, { r }); // "brighten" / "darken" / "shift"
         if (i !== ph) BM.show(e, false);
       });
@@ -610,28 +653,30 @@
       s.teal = ui.teal(el, 'Step 1 · Desaturate', 90);
       s.panel = ui.panel(el, {
         name: 'Grain Texture',
-        rows: [{ fx: 'Hue/Saturation', open: true, sel: true }, { label: 'Channel Control', val: 'Master' }, { label: 'Master Hue', val: '0x +0.0°' }, { label: 'Master Saturation', val: '100', key: 'sv' }, { slider: true, key: 'sl' }, { label: 'Master Lightness', val: '0' }],
+        rows: [{ fx: 'Hue/Saturation', open: true, sel: true }, { label: 'Channel Control', val: 'Master' }, { label: 'Master Hue', val: '0x +0.0°' }, { label: 'Master Saturation', val: '0', key: 'sv' }, { slider: true, key: 'sl' }, { label: 'Master Lightness', val: '0' }],
       });
-      s.cur = ui.cursor(el);
+      s.cur = ui.cursor(el, 190);
       s.top = 720;
       s.sat = (t) => 1 - ease.inOutCubic(seg(t, T(85) + 0.04, T(88) + 0.14)); // "take" → "color"
     },
     layout(s) {
       const o = ui.offset(s.panel.refs.sl, s.panel.el);
-      s.sx0 = 540 - 450 + o.x;
+      s.sx0 = PX + o.x;
       s.sw = o.w;
-      s.sy = s.top + o.y + o.h / 2;
+      s.sy = s.top + 3 + o.y + o.h / 2;
     },
     draw(g, t, s) {
-      BM.drawTex(g, tex().tinted, t, { jitter: 0, filter: `saturate(${s.sat(t).toFixed(3)})` });
+      // colour laid over the raw texture's luminance, so saturation 0 is exactly the grey texture of the next steps
+      BM.drawTex(g, tex().raw, t, { jitter: 0 });
+      BM.drawTex(g, tex().tinted, t, { jitter: 0, op: 'color', alpha: s.sat(t) });
     },
     update(t, s) {
       const v = s.sat(t);
-      popIn(s.teal, t, s.from, 540, 380, { r: -2 });
-      slideIn(s.panel.el, t, T(84) - 0.02, 540, s.top); // "first"
-      s.panel.refs.sv._val.textContent = Math.round(v * 100);
-      ui.setSlider(s.panel.refs.sl, v);
-      const kx = s.sx0 + v * s.sw;
+      popIn(s.teal, t, s.from, 540, 380);
+      slideIn(s.panel.el, t, cut(84), 540, s.top); // "first"
+      s.panel.refs.sv._val.textContent = Math.round((v - 1) * 100); // 0 → -100, like the real control
+      ui.setSlider(s.panel.refs.sl, 0.5 * v);
+      const kx = s.sx0 + 0.5 * v * s.sw;
       const t0 = T(85) + 0.04, t1 = T(88) + 0.14;
       let x, y;
       if (t < t0) [x, y] = BM.kf(t, [[T(84) + 0.2, [940, 1600]], [t0 - 0.02, [kx, s.sy], 'outCubic']]);
@@ -649,24 +694,24 @@
       s.teal = ui.teal(el, 'Step 2 · Levels', 90);
       s.panel = ui.panel(el, {
         tab: 'Effects & Presets',
-        rows: [{ search: '', key: 'q' }, { label: 'Animation Presets', tw: '▸', key: 'a' }, { label: 'Adjust', tw: '▾', key: 'adj' }, { label: 'Auto Levels', sub: true, icon: true, key: 'l0' }, { label: 'Levels', sub: true, icon: true, key: 'l1' }, { label: 'Levels (Per Channel)', sub: true, icon: true, key: 'l2' }],
+        rows: [{ search: '', key: 'q' }, { label: 'Animation Presets', tw: '▸', key: 'a' }, { label: 'Color Correction', tw: '▾', key: 'adj' }, { label: 'Auto Levels', sub: true, icon: true, key: 'l0' }, { label: 'Levels', sub: true, icon: true, key: 'l1' }, { label: 'Levels (Individual Controls)', sub: true, icon: true, key: 'l2' }],
       });
       s.ghost = BM.el('div', 'layerchip abs', el, '<span class="icon" style="display:inline-block;width:30px;height:26px;border:3px solid #9a9a9a;border-radius:5px;margin-right:14px;vertical-align:middle"></span>Levels');
       s.plus = BM.el('div', 'plus-badge abs', el, '+');
-      s.cur = ui.cursor(el);
+      s.cur = ui.cursor(el, 190);
       s.top = 560;
       s.typeAt = s.from + 0.06;
     },
     layout(s) {
       const o = ui.offset(s.panel.refs.l1, s.panel.el);
-      s.lx = 540 - 450 + o.x + 330;
-      s.ly = s.top + o.y + o.h / 2 + 6;
+      s.lx = PX + o.x + 330;
+      s.ly = s.top + 3 + o.y + o.h / 2 + 6;
     },
     draw(g, t) {
       BM.drawTex(g, tex().raw, t, { jitter: 0 });
     },
     update(t, s) {
-      popIn(s.teal, t, s.from, 540, 380, { r: 2 });
+      popIn(s.teal, t, s.from, 540, 380);
       popIn(s.panel.el, t, s.from, 540, s.top, { ax: 0.5, ay: 0, from: 0.92, dur: 0.18 });
       const n = Math.max(0, Math.min(6, Math.floor((t - s.typeAt) / 0.055) + 1));
       const r = s.panel.refs;
@@ -675,7 +720,7 @@
       ['a', 'adj', 'l0', 'l1', 'l2'].forEach((k) => (r[k].style.visibility = n >= 3 ? 'visible' : 'hidden'));
       const tClick = T(91) + 0.08; // "levels"
       r.l1.classList.toggle('hot', t >= T(91) - 0.04);
-      const drop = [560, 1280];
+      const drop = [560, 900]; // onto the effect controls that open next
       const xy = ui.drive(s.cur, t, [[s.from + 0.1, 960, 1560], [T(91) - 0.04, s.lx, s.ly, 'outCubic'], [tClick + 0.06, s.lx, s.ly], [s.to - 0.02, drop[0], drop[1], 'inOutSine']], [[tClick - 0.02, s.to]], [tClick]);
       const dragging = t >= tClick + 0.06;
       place(s.ghost, xy[0] - 40, xy[1] - 20, { ax: 0, ay: 0.5, o: dragging ? 0.92 : 0 });
@@ -688,32 +733,36 @@
     id: 'gamma',
     from: cut(92), // "to"
     build(el, s) {
-      s.count = ui.teal(el, '30%', 124);
+      s.count = ui.teal(el, 'avg 30%', 116);
       s.panel = ui.panel(el, {
         name: 'Grain Texture',
-        rows: [{ fx: 'Hue/Saturation' }, { fx: 'Levels', open: true, sel: true }, { label: 'Channel', val: 'RGB' }, { histo: [832, 280], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Input Black', val: '0.0' }, { label: 'Input White', val: '255.0' }, { label: 'Gamma', val: '1.00', key: 'gam' }],
+        rows: [{ fx: 'Hue/Saturation' }, { fx: 'Levels', open: true, sel: true }, { label: 'Channel', val: 'RGB' }, { histo: [HW, 280], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Input Black', val: '0.0' }, { label: 'Input White', val: '255.0' }, { label: 'Gamma', val: '1.00', key: 'gam' }],
       });
-      s.cur = ui.cursor(el);
+      s.cur = ui.cursor(el, 190);
       s.svg = ann.layer(el);
-      s.underline = ann.line(s.svg, [[420, 425], [665, 418]], { width: 8, seed: 61 });
+      s.underline = ann.line(s.svg, [[330, 492], [750, 484]], { width: 8, seed: 61 });
       s.top = 560;
-      s.t0 = T(93) + 0.12; // "move"
+      s.t0 = cut(93); // "move"
       s.t1 = T(100) - 0.06; // "gray"
-      s.gamma = (t) => kf(t, [[s.t0, 1], [s.t1, BM.GAMMA_N, 'inOutCubic']]);
+      s.gamma = (t) => kf(t, [[s.t0, 1], [s.t1, BM.GAMMA_N, 'outQuad']]);
     },
     layout(s) {
       const M = tex().mottled;
       const bins = BM.histogram(M.L);
       ui.drawHisto(s.panel.refs.h, bins);
       const o = ui.offset(s.panel.refs.h, s.panel.el);
-      const hx = 540 - 450 + o.x, hy = s.top + o.y;
+      const hx = PX + o.x, hy = s.top + 3 + o.y;
       let peak = 0;
       for (let i = 1; i < 256; i++) if (bins[i] > bins[peak]) peak = i;
-      s.circle = ann.circle(s.svg, hx + (peak / 255) * 832, hy + 170, 118, 140, { color: RED, width: 8, seed: 62 });
-      const b = ui.offset(s.panel.refs.bar, s.panel.el);
-      s.bx = 540 - 450 + b.x;
-      s.bw = b.w;
-      s.by = s.top + b.y + 62;
+      s.circle = ann.circle(s.svg, hx + (peak / 255) * HW, hy + 170, 118, 140, { color: RED, width: 9, seed: 62 });
+      // the triangles' own track (inside the bar's side margins), not the bar container
+      const tr = ui.offset(s.panel.refs.bar._b.parentNode, s.panel.el);
+      s.bx = PX + tr.x;
+      s.bw = tr.w;
+      s.by = s.top + 3 + tr.y + 24;
+      const gx = s.bx + Math.pow(0.5, BM.GAMMA_N) * s.bw;
+      s.midArrow = ann.arrow(s.svg, gx + 190, s.by + 150, gx + 12, s.by + 22, { bend: 30, color: RED, width: 9, head: 28, seed: 63 });
+      s.midLabel = ann.hand(s.el, 'MIDDLE GRAY', gx + 330, s.by + 175, { size: 64, color: RED, rot: -4, halo: true });
     },
     draw(g, t, s) {
       BM.drawTex(g, BM.levels(tex().mottled, 0, 255, s.gamma(t)), t, { jitter: 0 });
@@ -722,21 +771,23 @@
       const gm = s.gamma(t);
       const lut = BM.levelsLUT(0, 255, gm);
       const pct = Math.round(BM.meanOf(tex().mottled.L, lut) * 100);
-      s.count.textContent = pct + '%';
+      s.count.textContent = 'avg ' + pct + '%';
       const bounce = t >= s.t1 ? pop(t, s.t1, 0.22, 1.3).s : 1;
-      popIn(s.count, t, s.from, 540, 380, { s: bounce, r: -2 });
+      popIn(s.count, t, s.from, 540, 380, { s: bounce });
       popIn(s.panel.el, t, s.from, 540, s.top, { ax: 0.5, ay: 0, from: 0.92, dur: 0.18 });
       s.panel.refs.gam._val.textContent = gm.toFixed(2);
       const gpos = Math.pow(0.5, gm);
       ui.setTris(s.panel.refs.bar, 0, gpos, 1);
       const tx = s.bx + gpos * s.bw;
       let xy;
-      if (t < s.t0) xy = BM.kf(t, [[s.from + 0.1, [960, 1600]], [s.t0 - 0.04, [tx, s.by], 'outCubic']]);
+      if (t < s.t0) xy = BM.kf(t, [[s.from, [560, 900]], [s.t0 - 0.03, [tx, s.by], 'outCubic']]); // picks up from the Levels drop point
       else if (t < s.t1 + 0.12) xy = [tx, s.by];
       else xy = BM.kf(t, [[s.t1 + 0.12, [tx, s.by]], [s.t1 + 0.45, [tx + 150, s.by + 140]]]);
-      s.cur.set(xy[0], xy[1], t >= s.from + 0.1 ? 1 : 0, t >= s.t0 - 0.03 && t < s.t1 + 0.12 ? 1 : 0);
-      s.circle.at(t, T(96) - 0.02, 0.3); // "main tones"
+      s.cur.set(xy[0], xy[1], t >= s.from ? 1 : 0, t >= s.t0 - 0.03 && t < s.t1 + 0.12 ? 1 : 0);
+      s.circle.at(t, cut(96), 0.3); // "main tones"
       s.underline.at(t, s.t1 + 0.08, 0.22);
+      s.midArrow.at(t, T(99), 0.22); // "middle"
+      s.midLabel.at(t, T(99) + 0.06, 0.3);
     },
   });
 
@@ -749,28 +800,25 @@
       s.svg = ann.layer(el);
       s.circle = ann.circle(s.svg, 450, 830, 200, 160, { width: 8, seed: 71 });
       s.hand = ann.hand(el, 'PATTERN', 300, 606, { size: 74, rot: -5 });
-      s.check = ann.check(s.svg, 492, 598, 48, { width: 8, seed: 72 });
-      s.left = ui.chip(el, 'Overlay');
-      s.right = ui.chip(el, 'Normal');
+      s.check = ann.check(s.svg, 520, 590, 64, { width: 10, seed: 72 });
+      s.left = ui.chip(el, 'Normal');
+      s.right = ui.chip(el, 'Overlay');
       s.split = cut(106); // "without"
     },
     draw(g, t, s) {
-      if (t < s.split) {
-        const c = cam(1 + 0.07 * seg(t, s.from, s.split), 540, 900);
-        layer(g, label(), c);
-        layer(g, tex().neutral, c, 'overlay');
-        return;
-      }
-      const sx = kf(t, [[s.split, W], [T(108), W / 2, 'outCubic']]); // → "over"
-      layer(g, label(), cam());
-      layer(g, tex().neutral, cam(), 'overlay');
-      clipRect(g, sx, 0, W - sx, H, () => layer(g, tex().muddy, cam(), 'source-over', 0.86));
-      if (sx < W) divider(g, sx);
+      const z = t < s.split ? seg(t, s.from, s.split) : 1 - ease.inOutCubic(seg(t, s.split, T(108)));
+      const c = cam(1 + 0.07 * z, 540, BM.lerp(960, 900, z));
+      layer(g, label(), c);
+      layer(g, tex().neutral, c, 'overlay');
+      if (t < s.split) return;
+      const sx = kf(t, [[s.split, 0], [T(108), W / 2, 'outCubic']]); // Normal wipes in from the left → "over"
+      clipRect(g, 0, 0, sx, H, () => layer(g, tex().muddy, c, 'source-over', 0.86));
+      if (sx > 0) divider(g, sx);
     },
     update(t, s) {
       const a = t < s.split;
       popIn(s.teal, t, s.from, 540, 430, { until: s.split });
-      s.circle.at(t, T(103) - 0.02, 0.3); // "pattern"
+      s.circle.at(t, cut(103), 0.3); // "pattern"
       s.hand.at(t, T(103) + 0.1, 0.3);
       s.check.at(t, T(104), 0.16);
       [s.circle, s.check].forEach((d) => d.paths.forEach((p) => (p.style.display = a ? '' : 'none')));
@@ -785,16 +833,16 @@
     id: 'punch',
     from: cut(111), // "Want"
     draw(g, t, s) {
-      const cols = ['#f0539c', '#2f3fd0', '#ee6a2c', '#f0539c', '#3f9d95'];
-      const k = Math.floor(((t - s.from) * BM.FPS) / 3);
+      const cols = ['#f0539c', '#2f3fd0', '#ee6a2c'];
+      const k = t < cut(112) ? 0 : t < cut(113) ? 1 : 2; // "more" / "punch"
       const [dx, dy] = BM.shake(t, T(113), 0.3, 18, 9);
       g.save();
       g.translate(dx, dy);
-      BM.paper(g, cols[k % cols.length], tex().paperA, t, { boil: 3, jitter: 20 });
+      BM.paper(g, cols[k % cols.length], tex().paperA, t, { boil: 4, jitter: 3 });
       const slam = (t0) => (t < t0 ? 0 : 1 + 0.55 * (1 - ease.outCubic(seg(t, t0, t0 + 0.14))));
-      const m = slam(T(112) - 0.02), p = slam(T(113) - 0.02); // "more" / "punch"
-      if (m) BM.inkText(g, 'MORE', 540, 800, { size: 330, color: '#141217', op: 'multiply', scale: m, t, rough: 0.8 });
-      if (p) BM.inkText(g, 'PUNCH?', 540, 1090, { size: 330, color: '#141217', op: 'multiply', scale: p, t, rough: 0.8 });
+      const m = slam(cut(112)), p = slam(cut(113)); // "more" / "punch"
+      if (m) BM.inkText(g, 'MORE', 540, 800, { size: 330, color: '#141217', op: 'multiply', scale: m, t, rough: 0.3 });
+      if (p) BM.inkText(g, 'PUNCH?', 540, 1090, { size: 330, color: '#141217', op: 'multiply', scale: p, t, rough: 0.3 });
       g.restore();
     },
   });
@@ -806,38 +854,39 @@
     build(el, s) {
       s.panel = ui.panel(el, {
         name: 'Grain Texture',
-        rows: [{ fx: 'Hue/Saturation' }, { fx: 'Levels' }, { fx: 'Levels 2', open: true, sel: true, key: 'l2' }, { histo: [832, 240], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Input Black', val: '0.0', key: 'ib' }, { label: 'Input White', val: '255.0', key: 'iw' }],
+        rows: [{ fx: 'Hue/Saturation' }, { fx: 'Levels' }, { fx: 'Levels 2', open: true, sel: true, key: 'l2' }, { histo: [HW, 240], key: 'h' }, { levelsBar: true, key: 'bar' }, { label: 'Input Black', val: '0.0', key: 'ib' }, { label: 'Input White', val: '255.0', key: 'iw' }],
       });
-      s.cur = ui.cursor(el);
+      s.cur = ui.cursor(el, 190);
       s.svg = ann.layer(el);
-      s.check = ann.check(s.svg, 930, 900, 76, { width: 10, seed: 81 });
-      s.S = 0.86;
+      s.check = ann.check(s.svg, 930, 960, 96, { color: RED, width: 12, seed: 81 });
+      s.more = ann.hand(el, 'MORE CONTRAST', 540, 900, { size: 78, rot: -3, halo: true });
+      s.S = 0.9;
       s.top = 96;
       s.inB = (t) => kf(t, [[T(120), 0], [T(122) + 0.1, FINAL_B, 'inOutCubic']]); // "tune" → "contrast"
       s.inW = (t) => kf(t, [[T(122) + 0.3, 255], [T(124), FINAL_W, 'inOutCubic']]); // → "it"
     },
     layout(s) {
       const M = tex().mottled;
-      ui.drawHisto(s.panel.refs.h, BM.histogram(M.L, BM.levelsLUT(0, 255, BM.GAMMA_N)));
-      const b = ui.offset(s.panel.refs.bar, s.panel.el);
+      ui.drawHisto(s.panel.refs.h, BM.histogram(tex().neutralSrc.L));
+      const tr = ui.offset(s.panel.refs.bar._b.parentNode, s.panel.el);
       const l2 = ui.offset(s.panel.refs.l2, s.panel.el);
       s.full = s.panel.el.offsetHeight;
       s.clipped = s.full - l2.y; // hide from "Levels 2" down until it's added
-      const X = (lx) => 540 + (lx - 450) * s.S, Y = (ly) => s.top + ly * s.S;
-      s.bx = X(b.x);
-      s.bw = b.w * s.S;
-      s.by = Y(b.y + 62);
+      const X = (lx) => 540 + (lx + 3 - BM.ui.PANEL_W / 2) * s.S, Y = (ly) => s.top + (ly + 3) * s.S;
+      s.bx = X(tr.x);
+      s.bw = tr.w * s.S;
+      s.by = Y(tr.y + 24);
     },
     draw(g, t, s) {
       const c = cam(1 + 0.08 * seg(t, s.from, s.to), 540, 1080);
       layer(g, label(), c);
-      layer(g, BM.levels(tex().mottled, s.inB(t), s.inW(t), BM.GAMMA_N), c, 'overlay');
+      layer(g, BM.levels(tex().neutralSrc, s.inB(t), s.inW(t), 1), c, 'overlay');
     },
     update(t, s) {
       const ib = s.inB(t), iw = s.inW(t);
       const r = s.panel.refs;
       slideIn(s.panel.el, t, s.from, 540, s.top, { s: s.S });
-      const reveal = ease.outCubic(seg(t, T(116) - 0.02, T(116) + 0.26)); // "final"
+      const reveal = ease.outCubic(seg(t, cut(116), T(116) + 0.26)); // "final"
       s.panel.el.style.clipPath = `inset(0 0 ${((1 - reveal) * s.clipped).toFixed(1)}px 0 round 26px)`;
       r.l2.classList.toggle('sel', Math.floor((t - T(116)) * 6) % 2 === 0 || t > T(117));
       r.ib._val.textContent = ib.toFixed(1);
@@ -853,7 +902,8 @@
       else if (t < tw1 + 0.08) xy = [xw, s.by];
       else xy = BM.kf(t, [[tw1 + 0.08, [xw, s.by]], [tw1 + 0.4, [xw - 60, s.by + 170]]]);
       const press = (t >= tb0 - 0.03 && t < tb1 + 0.04) || (t >= tw0 - 0.02 && t < tw1 + 0.08) ? 1 : 0;
-      s.cur.set(xy[0], xy[1], t >= T(118) ? 1 : 0, press);
+      s.cur.set(xy[0], xy[1], t < T(118) ? 0 : 1 - seg(t, T(125), T(125) + 0.2), press); // leaves once it feels right
+      s.more.at(t, T(122), 0.35); // "contrast"
       s.check.at(t, T(125), 0.2); // "feels"
     },
   });
@@ -866,7 +916,7 @@
       s.left = ui.chip(el, 'Normal');
       s.right = ui.chip(el, 'Overlay');
       s.svg = ann.layer(el);
-      s.hand = ann.hand(el, 'SAME TEXTURE', 540, 770, { size: 74, rot: -3 });
+      s.hand = ann.hand(el, 'SAME TEXTURE', 540, 770, { size: 74, rot: -3, halo: true });
       s.a1 = ann.arrow(s.svg, 440, 1060, 250, 1220, { bend: -30, width: 8, seed: 91 });
       s.a2 = ann.arrow(s.svg, 640, 1060, 830, 1220, { bend: 30, width: 8, seed: 92 });
     },
@@ -875,9 +925,9 @@
       layer(g, tex().muddy, cam(), 'source-over', 0.86);
       clipRect(g, W / 2, 0, W / 2, H, () => {
         layer(g, label(), cam());
-        layer(g, BM.levels(tex().mottled, FINAL_B, FINAL_W, BM.GAMMA_N), cam(), 'overlay');
+        layer(g, BM.levels(tex().neutralSrc, FINAL_B, FINAL_W, 1), cam(), 'overlay');
       });
-      divider(g, W / 2);
+      divider(g, W / 2, [700, 840]); // gap for the label
       // the one texture, as a swatch
       g.save();
       g.beginPath();
@@ -891,7 +941,7 @@
       g.beginPath();
       g.arc(540, 960, 112, 0, Math.PI * 2);
       g.clip();
-      g.drawImage(tex().raw, 300, 700, 480, 520, 428, 848, 224, 224);
+      g.drawImage(tex().muddy, 300, 700, 480, 520, 428, 848, 224, 224);
       g.restore();
     },
     update(t, s) {
@@ -908,17 +958,25 @@
     id: 'cleaner',
     from: cut(129), // "cleaner"
     build(el, s) {
-      s.teal = ui.teal(el, 'Cleaner result.', 108);
+      s.teal = ui.teal(el, 'Cleaner result.', 104);
       s.svg = ann.layer(el);
-      s.under = ann.line(s.svg, [[300, 1330], [790, 1318]], { width: 9, seed: 99 });
+      s.under = ann.line(s.svg, [[110, 1430], [700, 1418]], { width: 9, seed: 99 });
+      s.chip = ui.chip(el, 'Overlay');
     },
     draw(g, t, s) {
-      const c = cam(1.03 + 0.05 * seg(t, s.from, BM.DURATION), 540, 960);
+      // same framing as the comparison, then the Normal half wipes off and the result settles in
+      const c = cam(1 + 0.05 * ease.inOutSine(seg(t, T(130), BM.DURATION)), 540, 960);
       layer(g, label(), c);
-      layer(g, BM.levels(tex().mottled, FINAL_B, FINAL_W, BM.GAMMA_N), c, 'overlay');
+      layer(g, BM.levels(tex().neutralSrc, FINAL_B, FINAL_W, 1), c, 'overlay');
+      const wx = kf(t, [[s.from, W / 2], [T(130) - 0.04, 0, 'inOutCubic']]); // → "result"
+      if (wx > 1) {
+        clipRect(g, 0, 0, wx, H, () => layer(g, tex().muddy, c, 'source-over', 0.86));
+        divider(g, wx);
+      }
     },
     update(t, s) {
-      popIn(s.teal, t, T(130) - 0.04, 540, 1240, { r: -2 }); // "result"
+      place(s.chip, 810, 112, { o: t < T(130) - 0.04 ? 1 : 0 });
+      popIn(s.teal, t, T(130) - 0.04, 400, 1340); // "result"
       s.under.at(t, T(130) + 0.12, 0.26);
     },
   });

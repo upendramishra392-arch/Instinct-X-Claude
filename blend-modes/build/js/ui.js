@@ -6,6 +6,7 @@
   const BM = window.BM;
   const el = BM.el;
   const ui = (BM.ui = {});
+  ui.PANEL_W = 960; // editor panels are centred on x = 540; the 3 px border is added in layout maths
 
   ui.title = function (parent, text, size, color) {
     const e = el('div', 'title abs', parent, text);
@@ -22,16 +23,17 @@
 
   // ---- Blend-mode dropdown ----------------------------------------------------
   ui.menu = function (parent, items, opt = {}) {
-    const font = opt.font || 48, line = opt.line || 66;
+    const font = opt.font || 48, line = opt.line || 66, pad = opt.pad || 22;
     const m = el('div', 'menu abs', parent);
     m.style.fontSize = font + 'px';
+    m.style.padding = pad + 'px 0';
     m.style.lineHeight = line + 'px';
     if (opt.width) m.style.width = opt.width + 'px';
     if (opt.height) m.style.height = opt.height + 'px';
     const hl = el('div', 'hl', m);
     hl.style.height = line + 'px';
     const rows = {};
-    let y = 22; // menu padding-top
+    let y = pad; // menu padding-top
     items.forEach((it) => {
       if (it === '-') {
         el('div', 'sep', m);
@@ -54,10 +56,15 @@
   };
 
   // ---- Pointer + click ring ----------------------------------------------------
-  const ARROW = '<svg viewBox="0 0 24 24" width="150" height="150"><path d="M3 2 L3 19.6 L7.6 15.4 L10.9 22.4 L14 21 L10.8 14.2 L17.2 14.2 Z" fill="#050505" stroke="#fff" stroke-width="1.35" stroke-linejoin="round"/></svg>';
-  ui.cursor = function (parent) {
-    const c = el('div', 'cursor abs', parent, ARROW);
-    c.style.transformOrigin = '19px 12px';
+  // The arrow's tip is at (3, 2) in its 24-unit viewBox; the margins put that tip exactly on
+  // the (x, y) passed to set(), whatever the size.
+  const ARROW = (size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M3 2 L3 19.6 L7.6 15.4 L10.9 22.4 L14 21 L10.8 14.2 L17.2 14.2 Z" fill="#050505" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  ui.cursor = function (parent, size = 180) {
+    const c = el('div', 'cursor abs', parent, ARROW(size));
+    const tx = (size * 3) / 24, ty = (size * 2) / 24;
+    c.style.width = c.style.height = size + 'px';
+    c.style.margin = `${-ty}px 0 0 ${-tx}px`;
+    c.style.transformOrigin = `${tx}px ${ty}px`;
     const ring = el('div', 'click-ring abs', parent);
     ring.style.visibility = 'hidden';
     c.style.visibility = 'hidden';
@@ -98,7 +105,7 @@
   //            {histo:[w,h]} | {levelsBar:true} | {search:'levels'}
   ui.panel = function (parent, spec) {
     const p = el('div', 'panel abs', parent);
-    p.style.width = (spec.width || 900) + 'px';
+    p.style.width = (spec.width || ui.PANEL_W) + 'px';
     const tabs = el('div', 'tabs', p);
     el('span', 'x', tabs, '×');
     el('span', 'lock', tabs);

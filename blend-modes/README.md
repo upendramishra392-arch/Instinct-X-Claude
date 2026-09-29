@@ -77,6 +77,12 @@ The renderer loads `build/index.html?render`, calls `BM.seekFrame(n)` for n = 0�
 screenshots the stage and streams PNGs to ffmpeg in order (several pages render in parallel).
 Every animation is a pure function of time, so any frame can be rendered on its own.
 
+Encoding details: frames are converted from RGB with the BT.709 matrix (matching the bt709
+tags — ffmpeg would otherwise use BT.601), the delivery file is CRF 20 capped at 8 Mbit/s,
+and the voiceover is loudness-normalised to −14 LUFS / −1.5 dBTP in two passes
+(`--no-loudnorm` keeps the original level). Output is written to a `.part.mp4` and renamed
+only when ffmpeg succeeds.
+
 ## Sync
 
 Word timings in `build/data/words.js` were measured on the voiceover decoded to PCM — the

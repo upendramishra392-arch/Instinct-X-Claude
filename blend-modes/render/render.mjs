@@ -9,7 +9,7 @@
 //            --master path   (also write an uncapped CRF 16 copy)
 import { chromium } from 'playwright';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { writeFile } from 'node:fs/promises';
@@ -91,31 +91,53 @@ if (stills || sheetEvery) {
 const out = arg('out', join(root, 'output/blend-modes-1080x1920-18fps.mp4'));
 mkdirSync(dirname(out), { recursive: true });
 const wav = join(root, 'output/.voiceover.wav');
+const rawWav = join(root, 'output/.voiceover-raw.wav');
 // Decode once to PCM so sample 0 of the soundtrack is exactly t = 0 of the timeline
 // (the word timings in build/data were measured on this same decode).
-spawnSync(ffmpeg, ['-y', '-loglevel', 'error', '-i', join(root, 'source/voiceover.mp3'), '-ar', '48000', '-ac', '2', wav], { stdio: 'inherit' });
+spawnSync(ffmpeg, ['-y', '-loglevel', 'error', '-i', join(root, 'source/voiceover.mp3'), '-ar', '48000', '-ac', '2', rawWav], { stdio: 'inherit' });
+// Two-pass loudness normalisation to the usual social target (-14 LUFS, -1.5 dBTP); the
+// supplied voiceover sits around -20 LUFS. Linear gain only, so timing is untouched.
+// --no-loudnorm keeps the original level.
+if (argv.includes('--no-loudnorm')) {
+  spawnSync(ffmpeg, ['-y', '-loglevel', 'error', '-i', rawWav, '-c', 'copy', wav]);
+} else {
+  const LN = 'I=-14:TP=-1.5:LRA=11';
+  const probe = spawnSync(ffmpeg, ['-hide_banner', '-i', rawWav, '-af', `loudnorm=${LN}:print_format=json`, '-f', 'null', '-']).stderr.toString();
+  const m = JSON.parse(probe.slice(probe.lastIndexOf('{'), probe.lastIndexOf('}') + 1));
+  const second = `loudnorm=${LN}:linear=true:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}`;
+  spawnSync(ffmpeg, ['-y', '-loglevel', 'error', '-i', rawWav, '-af', second, '-ar', '48000', wav], { stdio: 'inherit' });
+  console.log(`loudness: ${m.input_i} LUFS → -14 LUFS (true peak ${m.input_tp} dBTP)`);
+}
 
 // Per-frame film grain is expensive to encode, so the delivery file is quality-targeted
 // (CRF) but capped at 8 Mbit/s (~48 MB for 48 s). --master PATH also writes an uncapped
-// high-quality copy from the same frames.
+// high-quality copy from the same frames. The PNG frames are RGB: convert them with the
+// BT.709 matrix explicitly (ffmpeg's default is BT.601), so the bt709 tag is truthful.
 const outputArgs = (file, rate) => [
   '-map', '0:v', '-map', '1:a',
-  '-c:v', 'libx264', '-preset', 'slow', '-tune', 'grain', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-g', String(FPS * 2),
+  '-vf', 'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p',
+  '-c:v', 'libx264', '-preset', 'slow', '-tune', 'grain', '-r', String(FPS), '-g', String(FPS * 2),
   ...rate,
-  '-profile:v', 'high', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
-  '-c:a', 'aac', '-b:a', '192k', '-af', 'apad', '-t', String(frames.length / FPS),
+  '-profile:v', 'high', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv',
+  '-c:a', 'aac', '-b:a', '160k', '-af', 'apad', '-t', String(frames.length / FPS),
   '-movflags', '+faststart', file,
 ];
+// Write to temporary names and rename only on success, so a failed render never leaves a
+// truncated file at the real path.
+const part = (f) => f.replace(/\.mp4$/, '.part.mp4');
 const master = arg('master');
 if (master) mkdirSync(dirname(master), { recursive: true });
 const enc = spawn(ffmpeg, [
   '-y', '-loglevel', 'error',
   '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png', '-i', '-',
-  '-i', wav,
-  ...outputArgs(out, ['-crf', arg('crf', '20'), '-maxrate', arg('maxrate', '8M'), '-bufsize', arg('bufsize', '16M')]),
-  ...(master ? outputArgs(master, ['-crf', '16']) : []),
+  '-ss', String(frames[0] / FPS), '-i', wav, // a --from render gets the matching audio
+  ...outputArgs(part(out), ['-crf', arg('crf', '20'), '-maxrate', arg('maxrate', '8M'), '-bufsize', arg('bufsize', '16M')]),
+  ...(master ? outputArgs(part(master), ['-crf', '16']) : []),
 ], { stdio: ['pipe', 'inherit', 'inherit'] });
+let encFailed = null;
+enc.stdin.on('error', (e) => (encFailed = e));
 const encDone = new Promise((res, rej) => enc.on('close', (c) => (c === 0 ? res() : rej(new Error('ffmpeg exited ' + c)))));
+encDone.catch((e) => (encFailed = e));
 
 const ready = new Map();
 let nextWrite = 0, nextTake = 0, done = 0;
@@ -124,6 +146,7 @@ const write = async () => {
     const buf = ready.get(frames[nextWrite]);
     ready.delete(frames[nextWrite]);
     nextWrite++;
+    if (encFailed) throw encFailed;
     if (!enc.stdin.write(buf)) await new Promise((r) => enc.stdin.once('drain', r));
   }
 };
@@ -131,6 +154,7 @@ let writing = Promise.resolve();
 await Promise.all(
   pages.map(async (page) => {
     while (nextTake < frames.length) {
+      if (encFailed) throw encFailed;
       const f = frames[nextTake++];
       // keep the reorder buffer bounded
       while (f - frames[nextWrite] > workers * 6) await new Promise((r) => setTimeout(r, 20));
@@ -144,5 +168,7 @@ await writing;
 enc.stdin.end();
 await encDone;
 await browser.close();
-if (existsSync(wav)) rmSync(wav);
+renameSync(part(out), out);
+if (master) renameSync(part(master), master);
+for (const f of [wav, rawWav]) if (existsSync(f)) rmSync(f);
 console.log(`rendered ${frames.length} frames in ${((Date.now() - t0) / 1000).toFixed(1)}s → ${out}`);

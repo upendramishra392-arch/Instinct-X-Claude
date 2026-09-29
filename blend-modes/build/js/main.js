@@ -20,7 +20,7 @@
     'THE FIX', "ISN'T A", 'NEW TEXTURE,', "IT'S THE", 'RIGHT', 'BLEND MODE.',
     'GOT A', 'TEXTURE', 'ON WHITE?', 'TRY', 'MULTIPLY.', 'WHITE', 'DISAPPEARS', 'AND THE', 'DARK GRAIN', 'STAYS.',
     'ON BLACK?', 'TRY', 'SCREEN.', 'BLACK', 'DROPS OUT', 'AND THE', 'BRIGHT MARKS', 'SHOW THROUGH.',
-    'OVERLAY', 'AND SOFT LIGHT', 'WORK', 'DIFFERENTLY.', 'THEIR', 'NEUTRAL POINT', 'IS MIDDLE GRAY.',
+    'OVERLAY', 'AND SOFT LIGHT', 'WORK', 'DIFFERENTLY.', 'THEIR NEUTRAL POINT', 'IS MIDDLE GRAY.',
     'IF YOUR', 'TEXTURE', "ISN'T", 'CENTERED THERE,', 'IT CAN', 'BRIGHTEN', 'OR DARKEN', 'THE IMAGE', 'AND SHIFT', 'ITS COLORS.',
     'SO FIRST,', 'TAKE OUT', 'THE COLOR.', 'THEN USE', 'LEVELS', 'TO MOVE', "THE TEXTURE'S", 'MAIN TONES', 'TOWARD', 'MIDDLE GRAY.',
     'NOW THE', 'PATTERN', 'COMES THROUGH', 'WITHOUT', 'TAKING OVER', 'THE IMAGE.',
@@ -94,7 +94,7 @@
     if (sc.draw) sc.draw(g, t, sc);
     if (sc.update) sc.update(t, sc);
     capEl.textContent = captionAt(t);
-    gg.drawImage(BM.tex.grain[(frame * 3) % BM.tex.grain.length], 0, 0);
+    gg.drawImage(BM.tex.grain[Math.floor(frame / 2) % BM.tex.grain.length], 0, 0);
     BM.frame = frame;
   }
 
@@ -131,7 +131,7 @@
     const scrub = document.getElementById('scrub');
     const clock = document.getElementById('clock');
     scrub.max = BM.FRAMES - 1;
-    let last = -1;
+    let last = 0; // frame 0 is rendered at boot
     const fit = () => {
       const vw = window.innerWidth, vh = window.innerHeight - 56;
       const s = Math.min(vw / BM.W, vh / BM.H);
